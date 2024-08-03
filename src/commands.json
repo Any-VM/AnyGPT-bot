@@ -1,6 +1,6 @@
 [
     {
-        "name": "ping",
+        "name": "userid",
         "description": "Replies with Pong!"
     }
 ]
