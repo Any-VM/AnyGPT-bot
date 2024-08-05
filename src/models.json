@@ -1,0 +1,117 @@
+{
+    "object": "list",
+    "data": [
+      {
+        "id": "gpt-3.5-turbo",
+        "type": "chat.completions",
+        "owned_by": "openai",
+        "endpoint": "/v1/chat/completions",
+        "premium": false
+      },
+      {
+        "id": "gpt-4",
+        "type": "chat.completions",
+        "owned_by": "openai",
+        "endpoint": "/v1/chat/completions",
+        "premium": false
+      },
+      {
+        "id": "gpt-4-turbo",
+        "type": "chat.completions",
+        "owned_by": "openai",
+        "endpoint": "/v1/chat/completions",
+        "premium": true
+      },
+      {
+        "id": "gpt-4o",
+        "type": "chat.completions",
+        "owned_by": "openai",
+        "endpoint": "/v1/chat/completions",
+        "premium": true
+      },
+      {
+        "id": "gpt-4o-mini",
+        "type": "chat.completions",
+        "owned_by": "openai",
+        "endpoint": "/v1/chat/completions",
+        "premium": true
+      },
+      {
+        "id": "claude-3-5-sonnet",
+        "type": "chat.completions",
+        "owned_by": "anthropic",
+        "endpoint": "/v1/chat/completions",
+        "premium": true
+      },
+      {
+        "id": "claude-3-opus",
+        "type": "chat.completions",
+        "owned_by": "anthropic",
+        "endpoint": "/v1/chat/completions",
+        "premium": true
+      },
+      {
+        "id": "claude-3-sonnet",
+        "type": "chat.completions",
+        "owned_by": "anthropic",
+        "endpoint": "/v1/chat/completions",
+        "premium": true
+      },
+      {
+        "id": "claude-3-haiku",
+        "type": "chat.completions",
+        "owned_by": "anthropic",
+        "endpoint": "/v1/chat/completions",
+        "premium": false
+      },
+      {
+        "id": "command-r-plus",
+        "type": "chat.completions",
+        "owned_by": "cohere",
+        "endpoint": "/v1/chat/completions",
+        "premium": true
+      },
+      {
+        "id": "gemini-1.5-flash",
+        "type": "chat.completions",
+        "owned_by": "google",
+        "endpoint": "/v1/chat/completions",
+        "premium": false
+      },
+      {
+        "id": "gemini-1.5-pro",
+        "type": "chat.completions",
+        "owned_by": "google",
+        "endpoint": "/v1/chat/completions",
+        "premium": false
+      },
+      {
+        "id": "llama-3.1-70b",
+        "type": "chat.completions",
+        "owned_by": "meta",
+        "endpoint": "/v1/chat/completions",
+        "premium": false
+      },
+      {
+        "id": "llama-3.1-405b",
+        "type": "chat.completions",
+        "owned_by": "meta",
+        "endpoint": "/v1/chat/completions",
+        "premium": false
+      },
+      {
+        "id": "mistral-large-latest",
+        "type": "chat.completions",
+        "owned_by": "mistral",
+        "endpoint": "/v1/chat/completions",
+        "premium": true
+      },
+      {
+        "id": "llama-3-sonar-large-32k-online",
+        "type": "chat.completions",
+        "owned_by": "perplexity",
+        "endpoint": "/v1/chat/completions",
+        "premium": false
+      }
+    ]
+  }

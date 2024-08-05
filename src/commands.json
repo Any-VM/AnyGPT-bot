@@ -1,6 +1,26 @@
 [
     {
-        "name": "userid",
-        "description": "Replies with Pong!"
+        "name": "apikey",
+        "description": "get or see your api key"
+    },
+    {
+        "name": "models",
+        "description": "change the model"
+    },
+    {
+        "name": "custom",
+        "description": "set a unlisted model",
+        "options": [
+            {
+                "name": "model",
+                "description": "The custom model to use",
+                "type": 3, 
+                "required": true
+            }
+        ]
+    },
+    {
+        "name": "chat",
+        "description": "chat with ANYGPT"
     }
 ]

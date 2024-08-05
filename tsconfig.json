@@ -1,18 +1,28 @@
 {
-    "compilerOptions": {
+  "compilerOptions": {
       "target": "ES6",
-      "module": "ESNext",
-      "strict": true,
-      "esModuleInterop": true,
-      "skipLibCheck": true,
-      "forceConsistentCasingInFileNames": true,
+      "module": "ESNext", 
+      "strict": true, 
+      "esModuleInterop": true, 
+      "skipLibCheck": true, 
+      "forceConsistentCasingInFileNames": true, 
       "outDir": "./dist",
-      "moduleResolution": "node"
-    },
-    "include": [
-      "src/**/*"
-    ],
-    "exclude": [
-      "node_modules"
-    ]
-  }
+      "moduleResolution": "node", 
+      "sourceMap": true,
+      "resolveJsonModule": true, 
+      "noImplicitAny": true,
+      "noUnusedLocals": true, 
+      "noUnusedParameters": true,
+      "noImplicitReturns": true, 
+      "noFallthroughCasesInSwitch": true,
+      "allowSyntheticDefaultImports": true 
+  },
+  "include": [
+      "src/**/*",
+      "./**/*"
+  ],
+  "exclude": [
+      "node_modules", 
+      "dist"
+  ]
+}
