@@ -3,39 +3,29 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 
-export async function apikey(name: string) {
-    try {
-        const response = await axios.post(
-            `${process.env.URL}`,
-            { name },
-            {
-                headers: {
-                    Authorization: `Bearer ${process.env.ADMIN_KEY}`
-                }
-            }
-        );
-        const key = response.data.result.key;
-        console.log(key);
-        return key;
-    } catch (error) {
-        console.error(error);
-    }
-}
+
 
 export function readUserIds() {
-    if (fs.existsSync('db.json')) {
-        const data = fs.readFileSync('db.json', 'utf-8');
+    const dbFilePath = path.join('src', 'db.json');
+    if (fs.existsSync(dbFilePath)) {
+        const data = fs.readFileSync(dbFilePath, 'utf-8');
         return JSON.parse(data);
     } else {
-        return {};
+        throw new Error(`File not found: ${dbFilePath}`);
     }
 }
 
 export function writeUserIds(userIds: any) {
-    const data = JSON.stringify(userIds, null, 2);
-    fs.writeFileSync('db.json', data, 'utf-8');
-}
+    const dbDirPath = path.join('src');
+    const dbFilePath = path.join(dbDirPath, 'db.json');
 
+    if (!fs.existsSync(dbDirPath)) {
+        fs.mkdirSync(dbDirPath, { recursive: true });
+    }
+
+    const data = JSON.stringify(userIds, null, 2);
+    fs.writeFileSync(dbFilePath, data, 'utf-8');
+}
 export async function readModels() {
     if (fs.existsSync('src/models.json')) {
         const data = fs.readFileSync('src/models.json', 'utf-8');
@@ -54,25 +44,77 @@ export function saveUserData(userId: string, apiKey: string, selectedModel: stri
     };
     writeUserIds(userIds);
 }
+export async function key(name: string) {
+    try {
+        const response = await axios.post(
+            `${process.env.URL}`,
+            { name },
+            {
+                headers: {
+                    Authorization: `Bearer ${process.env.ADMIN_KEY}`
+                }
+            }
+        );
+        const key = response.data.result.key;
+        console.log(key);
+        return key;
+    } catch (error) {
+        console.error(error);
+    }
+}
 
-export async function sendmessage(message: string, model: string, apiKey: string, userId: string, historyId: string) {
+export async function sendmessage(args: string, userId: string) {
+    const dbFilePath = path.join('src', 'db.json');
+    const dbContent = await fs.promises.readFile(dbFilePath, 'utf-8');
+    const db = JSON.parse(dbContent);
+
+    if (!db[userId] || !db[userId].apiKey) {
+        db[userId] = db[userId] || {};
+        db[userId].apiKey = await key(userId);
+    }
+
+    if (!db[userId].model) {
+        db[userId].model = 'gpt-3.5-turbo';
+    }
+
+    const userApiKey = db[userId].apiKey;
+    const model = db[userId].model;
+
     const url = 'https://gpt.anyvm.tech/v1/chat/completions';
     
     const headers = {
-        'Authorization': `Bearer ${apiKey}`,
+        'Authorization': `Bearer ${userApiKey}`,
         'Content-Type': 'application/json'
     };
 
-    let messages = [
-        {
-            role: 'user',
-            content: message
+    let messageHistory: { messages: { role: string, content: string }[] } = { messages: [] };
+
+    if (!db[userId].historyFilePath) {
+        return `No history file path found for user ID ${userId} in db.json.`;
+    }
+
+    const messageHistoryFilePath = path.join('src', 'history', db[userId].historyFilePath);
+
+    if (!fs.existsSync('src/history')) {
+        fs.mkdirSync('src/history');
+    }
+
+    if (fs.existsSync(messageHistoryFilePath)) {
+        const fileContent = fs.readFileSync(messageHistoryFilePath, 'utf-8');
+        messageHistory = JSON.parse(fileContent);
+        if (!Array.isArray(messageHistory.messages)) {
+            messageHistory.messages = [];
         }
-    ];
+    }
+
+    messageHistory.messages.push({
+        role: 'user',
+        content: args
+    });
 
     const data = {
         model: model,
-        messages: messages
+        messages: messageHistory.messages
     };
 
     try {
@@ -81,37 +123,28 @@ export async function sendmessage(message: string, model: string, apiKey: string
 
         const assistantMessage = responseData.choices[0].message;
 
-        messages.push({
+        messageHistory.messages.push({
             role: assistantMessage.role,
             content: assistantMessage.content
         });
 
-        
-        
-        let messageHistory: { [key: string]: any } = {};
-        const messageHistoryFilePath = path.join('src/history', `${userId}_${historyId}.json`);
-        if (!fs.existsSync(messageHistoryFilePath)) {
-            fs.mkdirSync('src/history');
-        }
-        if (fs.existsSync(messageHistoryFilePath)) {
-            const fileContent = fs.readFileSync(messageHistoryFilePath, 'utf-8');
-            messageHistory = JSON.parse(fileContent);
-        }
-
-        if (!messageHistory[userId]) {
-            messageHistory[userId] = [];
-        }
-        messageHistory[userId].push(...messages);
-
         fs.writeFileSync(messageHistoryFilePath, JSON.stringify(messageHistory, null, 2));
 
-        return responseData;
-    } catch (error) {
+        return assistantMessage.content;
+    } catch (error: string | any) {
         console.error('Error sending message:', error);
-        throw error;
+        
+        const errorMessage = String(error);
+    
+        if (error.response && error.response.data && error.response.data.message) {
+            return `Error: ${error.response.data.message}`;
+        } else if (error.message) {
+            return `Error: ${error.message}`;
+        } else {
+            return `An unknown error occurred: ${errorMessage}`;
+        }
     }
 }
-
 export async function loadHistory(message: any, historyId: string): Promise<void> {
     const userId: string = message.author.id;
     let messageHistoryFilePath: string;
@@ -148,7 +181,7 @@ export function setHistory(message: any, historyId: string): void {
         fs.mkdirSync('src/history');
     }
 
-    fs.writeFileSync(messageHistoryFilePath, JSON.stringify({ [userId]: [] }, null, 2));
+    fs.writeFileSync(messageHistoryFilePath, JSON.stringify({ messages: [] }, null, 2));
     saveDB(messageHistoryFilePath, message); 
     message.reply(`History ID set to: ${historyId}`);
 }
@@ -302,14 +335,12 @@ async function saveDB(MessageHistoryFilePath: string, message: any): Promise<voi
         const dbContent = fs.readFileSync(dbFilePath, 'utf-8');
         const db = JSON.parse(dbContent);
 
-        // Extract userId from the message object
         const userId = message.author.id;
 
         if (!db[userId]) {
             db[userId] = {};
         }
 
-        // Extract the file name from MessageHistoryFilePath
         const fileName = path.basename(MessageHistoryFilePath);
         db[userId].historyFilePath = fileName;
 

@@ -2,7 +2,7 @@ import { Client, GatewayIntentBits, REST, Routes, ActionRowBuilder, StringSelect
 import dotenv from 'dotenv'; 
 import fs from 'fs';
 dotenv.config();
-import { apikey, readUserIds, writeUserIds, readModels, clearHistory, setHistory, loadHistory, sendmessage, loadPublic, setPublic, copyHistory, showHistory } from './utils';
+import { key, readUserIds, writeUserIds, readModels, clearHistory, setHistory, loadHistory, sendmessage, loadPublic, setPublic, copyHistory, showHistory } from './utils';
 import path from 'path';
 const commands = JSON.parse(fs.readFileSync('src/commands.json', 'utf-8'));
 
@@ -52,7 +52,7 @@ client.on('interactionCreate', async interaction => {
             const existingApiKey = userIds[userId].apiKey;
             await interaction.followUp({ content: `Bearer ${existingApiKey}`, ephemeral: true });
         } else {
-            const apiKey = await apikey(userId);
+            const apiKey = await key(userId);
             userIds[userId] = { apiKey: apiKey, model: '' };
             writeUserIds(userIds);
             await interaction.followUp({ content: `Bearer ${apiKey}`, ephemeral: true });
@@ -61,7 +61,7 @@ client.on('interactionCreate', async interaction => {
         await interaction.deferReply({ ephemeral: true });
     
         if (!Object.keys(userIds).includes(userId)) {
-            const apiKey = await apikey(userId);
+            const apiKey = await key(userId);
             userIds[userId] = { apiKey: apiKey, model: '' };
             await writeUserIds(userIds);
             await interaction.followUp({ content: `API key created: Bearer ${apiKey}`, ephemeral: true });
@@ -116,7 +116,7 @@ client.on('interactionCreate', async interaction => {
         await interaction.deferReply({ ephemeral: true });
     
         if (!Object.keys(userIds).includes(userId)) {
-            const apiKey = await apikey(userId);
+            const apiKey = await key(userId);
             userIds[userId] = { apiKey: apiKey, model: '' };
             await writeUserIds(userIds);
             await interaction.followUp({ content: `API key created: Bearer ${apiKey}`, ephemeral: true });
@@ -140,8 +140,11 @@ client.on('messageCreate', async (message: Message) => {
     if (message.author.bot) return;
     const userId = message.author.id;
     const prefix = '!';
-    const botMention = `<@${client.user?.id}>`;
-
+    if (client.user && message.content.includes(client.user.id)) {
+        const args = message.content.split(/ +/).slice(1);
+        const response = await sendmessage(args.join(' '), userId);
+        message.reply(response);
+    } 
     if (message.content.startsWith(prefix)) {
         const args = message.content.slice(prefix.length).trim().split(/ +/);
         const command = args.shift()?.toLowerCase();
@@ -223,13 +226,14 @@ client.on('messageCreate', async (message: Message) => {
             } else if (subCommand === 'show') {
                 const historyId = args[0];
                 showHistory(message, historyId);
-            } else {
-                message.reply('Unknown subcommand. Use `!mem load <historyid>`, `!mem set <historyid>`, `!mem clear`, `!mem show`, `!mem copy <targetHistoryId>`, `!mem public <historyid>`, or `!mem loadpublic <historyid>`. historyid will default to last loaded history');
-            }
-            
-            if (message.content.includes(botMention)) {
+            }else if (subCommand === 'chat') {
                 const args = message.content.split(/ +/).slice(1);
-                // Handle bot mention logic here
+                const userId = message.author.id;
+                const response = await sendmessage(args.join(' '), userId);
+                message.reply(response);
+            }          
+             else {
+                message.reply('Unknown subcommand. Use `!mem load <historyid>`, `!mem set <historyid>`, `!mem clear`, `!mem show`, `!mem copy <targetHistoryId>`, `!mem public <historyid>`, or `!mem loadpublic <historyid>`. historyid will default to last loaded history');
             }
         }
     }
