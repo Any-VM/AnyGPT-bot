@@ -120,7 +120,7 @@ export async function loadHistory(message: any, historyId: string): Promise<void
     if (fs.existsSync(messageHistoryFilePath)) {
         const fileContent: string = fs.readFileSync(messageHistoryFilePath, 'utf-8');
         const messageHistory: any = JSON.parse(fileContent);
-        saveDB(message, historyId);
+        saveDB(messageHistoryFilePath, message);
         message.reply(`Loaded history: ${JSON.stringify(messageHistory, null, 2)}`);
     } else {
         message.reply(`No history found for ID: ${historyId}`);
@@ -134,7 +134,7 @@ export async function loadPublic(message: any, historyId: string): Promise<void>
     if (fs.existsSync(messageHistoryFilePath)) {
         const fileContent: string = fs.readFileSync(messageHistoryFilePath, 'utf-8');
         const messageHistory: any = JSON.parse(fileContent);
-        saveDB(message, historyId);
+        saveDB(messageHistoryFilePath, message);
         message.reply(`Loaded history: ${JSON.stringify(messageHistory, null, 2)}`);
     } else {
         message.reply(`No public history found for ID: ${historyId}`);
@@ -149,9 +149,10 @@ export function setHistory(message: any, historyId: string): void {
     }
 
     fs.writeFileSync(messageHistoryFilePath, JSON.stringify({ [userId]: [] }, null, 2));
-    saveDB(message, historyId);
+    saveDB(messageHistoryFilePath, message); 
     message.reply(`History ID set to: ${historyId}`);
 }
+
 export async function copyHistory(message: any, historyId: string): Promise<void> {
     const userId: string = message.author.id;
     const dbFilePath: string = path.join('src', 'db.json');
@@ -161,10 +162,17 @@ export async function copyHistory(message: any, historyId: string): Promise<void
         const db = JSON.parse(dbContent);
 
         if (db[userId] && db[userId].historyFilePath) {
-            const messageHistoryFilePath: string = db[userId].historyFilePath;
+            const originalHistoryFilePath: string = path.join('src', 'history', db[userId].historyFilePath);
 
-            if (fs.existsSync(messageHistoryFilePath)) {
-                message.reply(`History ID ${historyId} already exists. change id to save.`);
+            if (!fs.existsSync(originalHistoryFilePath)) {
+                message.reply(`Original history file does not exist.`);
+                return;
+            }
+
+            const newHistoryFilePath: string = path.join('src', 'history', `${userId}_${historyId}.json`);
+
+            if (fs.existsSync(newHistoryFilePath)) {
+                message.reply(`History ID ${historyId} already exists. Change ID to save.`);
                 return;
             }
 
@@ -172,8 +180,13 @@ export async function copyHistory(message: any, historyId: string): Promise<void
                 fs.mkdirSync('src/history');
             }
 
-            fs.writeFileSync(messageHistoryFilePath, JSON.stringify({ [userId]: [] }, null, 2));
-            saveDB(message, historyId);
+            const originalContent = await fs.promises.readFile(originalHistoryFilePath, 'utf-8');
+            await fs.promises.writeFile(newHistoryFilePath, originalContent);
+
+            db[userId].historyFilePath = newHistoryFilePath;
+            await fs.promises.writeFile(dbFilePath, JSON.stringify(db, null, 2));
+
+            saveDB(newHistoryFilePath, message);
             message.reply(`History ID set to: ${historyId}`);
         } else {
             message.reply(`No history file path found for user ID ${userId} in db.json.`);
@@ -183,8 +196,67 @@ export async function copyHistory(message: any, historyId: string): Promise<void
         message.reply('An error occurred while accessing the database.');
     }
 }
+export function showHistory(message: any, historyId?: string): void {
+    const userId: string = message.author.id;
+    let userHistoryFilePath: string;
+    let extractedHistoryId: string | undefined;
 
-export function clearHistory(message: any): void {
+    const dbFilePath = path.join('src', 'db.json');
+    if (!fs.existsSync(dbFilePath)) {
+        message.reply('No history ID provided and db.json file not found.');
+        return;
+    }
+
+    const dbContent = fs.readFileSync(dbFilePath, 'utf-8');
+    const db = JSON.parse(dbContent);
+    const userRecord = db[userId];
+
+    if (!userRecord) {
+        message.reply('User record not found in db.json.');
+        return;
+    }
+
+    if (!historyId) {
+        if (userRecord.historyFilePath) {
+            userHistoryFilePath = path.join('src/history', userRecord.historyFilePath);
+            const fileName = path.basename(userHistoryFilePath, '.json');
+            const parts = fileName.split('_');
+            if (parts.length === 2 && (parts[0] === 'public' || parts[0] === userId)) {
+                extractedHistoryId = parts[1];
+            } else {
+                message.reply('Invalid history file path format in db.json.');
+                return;
+            }
+        } else {
+            message.reply('No history ID provided and no default history file path found in db.json.');
+            return;
+        }
+    } else {
+        if (userRecord.historyFilePath && userRecord.historyFilePath.includes('public')) {
+            userHistoryFilePath = path.join('src/history', `public_${historyId}.json`);
+        } else {
+            userHistoryFilePath = path.join('src/history', `${userId}_${historyId}.json`);
+        }
+    }
+    let status = '';
+    
+    if (db[userId] && db[userId].historyFilePath) {
+        const historyFilePath = db[userId].historyFilePath;
+    
+        if (/public/.test(historyFilePath)) {
+            status = 'public';
+        } else if (/\d/.test(historyFilePath)) {
+            status = 'private';
+        }
+    }
+    if (fs.existsSync(userHistoryFilePath)) {
+        const historyContent = fs.readFileSync(userHistoryFilePath, 'utf-8');
+        message.reply(`${status} history ID is ${historyId || extractedHistoryId}\nContents of the file:\n${historyContent}`);
+    } else {
+        message.reply('No history found for the given history ID.');
+    }
+}
+export function clearHistory(message: any, historyId?: string): void {
     const userId: string = message.author.id;
     const dbFilePath: string = path.join('src', 'db.json');
 
@@ -196,12 +268,14 @@ export function clearHistory(message: any): void {
     const dbContent = fs.readFileSync(dbFilePath, 'utf-8');
     const db = JSON.parse(dbContent);
 
-    if (!db[userId] || !db[userId].historyId) {
-        message.reply('No history found for the given userId.');
-        return;
+    if (!historyId) {
+        if (!db[userId] || !db[userId].historyFilePath) {
+            message.reply('No history found for the given userId.');
+            return;
+        }
+        historyId = db[userId].historyFilePath.split('_').pop()?.replace('.json', '') || '';
     }
 
-    const historyId: string = db[userId].historyId;
     const userHistoryFilePath: string = path.join('src/history', `${userId}_${historyId}.json`);
 
     if (fs.existsSync(userHistoryFilePath)) {
@@ -219,66 +293,71 @@ export function clearHistory(message: any): void {
         return;
     }
 }
-async function saveDB(message: any, historyId: string) {
+async function saveDB(MessageHistoryFilePath: string, message: any): Promise<void> {
+    try {
+        const dbFilePath = path.join('src', 'db.json');
+
+        await checkDatabaseFile(dbFilePath, message);
+
+        const dbContent = fs.readFileSync(dbFilePath, 'utf-8');
+        const db = JSON.parse(dbContent);
+
+        // Extract userId from the message object
+        const userId = message.author.id;
+
+        if (!db[userId]) {
+            db[userId] = {};
+        }
+
+        // Extract the file name from MessageHistoryFilePath
+        const fileName = path.basename(MessageHistoryFilePath);
+        db[userId].historyFilePath = fileName;
+
+        fs.writeFileSync(dbFilePath, JSON.stringify(db, null, 2));
+    } catch (error) {
+        console.error('Error in saveDB:', error);
+    }
+}
+export async function setPublic(message: any, historyId?: string): Promise<void> {
     const userId = message.author.id;
     const dbFilePath = path.join('src', 'db.json');
-    const userHistoryFilePath = `${userId}_${historyId}.json`;
+    let dbData;
 
-    await checkDatabaseFile(dbFilePath, message);
-
-    const dbContent = fs.readFileSync(dbFilePath, 'utf-8');
-    const db = JSON.parse(dbContent);
-
-    if (!db[userId]) {
-        db[userId] = {};
-    }
-
-    db[userId].historyFilePath = userHistoryFilePath;
-
-    fs.writeFileSync(dbFilePath, JSON.stringify(db, null, 2));
-    message.reply(`saved  ${historyId}.`);
-}
-
-export function setPublic(message: any, historyId: string): void {
-    const userId: string = 'public';
-    const publicHistoryFilePath = path.join('src/history', `public_${historyId}.json`);
-    if (fs.existsSync(publicHistoryFilePath)) {
-        message.reply(`Public history ID ${historyId} already exists. change id to save.`);
+    try {
+        dbData = JSON.parse(await fs.promises.readFile(dbFilePath, 'utf8'));
+    } catch (error) {
+        console.error('Error reading db.json:', error);
+        message.reply('An error occurred while reading the database.');
         return;
     }
 
-    if (!fs.existsSync('src/history')) {
-        fs.mkdirSync('src/history');
-    }
-
-    fs.writeFileSync(publicHistoryFilePath, JSON.stringify({ [userId]: [] }, null, 2));
-    saveDB(message, historyId);
-    message.reply(`Public history ID set to: ${historyId}`);
-}
-export async function checkHistory(userId: string, message: any): Promise<string | null> {
-    const dbFilePath = path.join('src', 'db.json');
-
-    try {
-        await fs.promises.access(dbFilePath);
-    } catch (error) {
-        return null;
-    }
-
-    const dbContent = await fs.promises.readFile(dbFilePath, 'utf-8');
-    const db = JSON.parse(dbContent);
-
-    if (db[userId] && db[userId].historyFilePath) {
-        const historyFilePath = db[userId].historyFilePath;
-        const historyId = historyFilePath.split('_')[1].split('.')[0];
-
-        if (/^\d+$/.test(userId)) {
-            message.reply(`Current history is private and ID is ${historyId}`);
-        } else if (userId === "public") {
-            message.reply(`Current history is public and ID is ${historyId}`);
+    if (!historyId) {
+        if (!dbData[userId] || !dbData[userId].historyFilePath) {
+            message.reply(`No history file path found for user ID ${userId}.`);
+            return;
         }
-
-        return historyId;
+        historyId = dbData[userId].historyFilePath;
     }
 
-    return null;
+    const sourceHistoryFilePath = path.join('src/history', `${userId}_${historyId}.json`);
+    const historyIdPart = historyId ? historyId.split('_').pop()?.replace('.json', '') : undefined; 
+    const publicHistoryFilePath = path.join('src/history', `public_${historyIdPart}.json`);
+    console.log(sourceHistoryFilePath);
+    if (!fs.existsSync(sourceHistoryFilePath)) {
+        message.reply(`Source history file ${historyId} does not exist.`);
+        return;
+    }
+    
+    if (fs.existsSync(publicHistoryFilePath)) {
+        message.reply(`Public history ID ${historyIdPart} already exists. Change ID to save.`);
+        return;
+    }
+    
+    try {
+        await fs.promises.rename(sourceHistoryFilePath, publicHistoryFilePath);
+        message.reply(`Public history ID set to: ${historyIdPart}`);
+    } catch (error) {
+        console.error('Error renaming file:', error);
+        message.reply('An error occurred while renaming the file.');
+    }
 }

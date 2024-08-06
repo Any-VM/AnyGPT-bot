@@ -2,7 +2,7 @@ import { Client, GatewayIntentBits, REST, Routes, ActionRowBuilder, StringSelect
 import dotenv from 'dotenv'; 
 import fs from 'fs';
 dotenv.config();
-import { apikey, readUserIds, writeUserIds, readModels, clearHistory, setHistory, loadHistory, sendmessage, checkHistory, loadPublic, setPublic, copyHistory } from './utils';
+import { apikey, readUserIds, writeUserIds, readModels, clearHistory, setHistory, loadHistory, sendmessage, loadPublic, setPublic, copyHistory, showHistory } from './utils';
 import path from 'path';
 const commands = JSON.parse(fs.readFileSync('src/commands.json', 'utf-8'));
 
@@ -164,10 +164,9 @@ client.on('messageCreate', async (message: Message) => {
                 }
                 setHistory(message, historyId);
             } else if (subCommand === 'clear') {
-                clearHistory(message);
-            } else if (subCommand === 'check') {
-                checkHistory(userId, message);
-            } else if (subCommand === 'save') {
+                const historyId = args[0];
+                clearHistory(message, historyId);
+            }  else if (subCommand === 'save') {
                 const historyId = args[0];
                 if (!historyId) {
                     message.reply('Please provide a history ID.');
@@ -221,12 +220,17 @@ client.on('messageCreate', async (message: Message) => {
                     return;
                 }
                 loadPublic(message, historyId);
+            } else if (subCommand === 'show') {
+                const historyId = args[0];
+                showHistory(message, historyId);
             } else {
-                message.reply('Unknown subcommand. Use `!mem load <historyid>`, `!mem set <historyid>`, `!mem clear`, `!mem check`, `!mem save <historyid>`, `!mem copy <sourceHistoryId> <targetHistoryId>`, `!mem public <historyid>`, or `!mem loadpublic <historyid>`.');
+                message.reply('Unknown subcommand. Use `!mem load <historyid>`, `!mem set <historyid>`, `!mem clear`, `!mem show`, `!mem copy <targetHistoryId>`, `!mem public <historyid>`, or `!mem loadpublic <historyid>`. historyid will default to last loaded history');
+            }
+            
+            if (message.content.includes(botMention)) {
+                const args = message.content.split(/ +/).slice(1);
+                // Handle bot mention logic here
             }
         }
-    } else if (message.content.includes(botMention)) {
-        const args = message.content.split(/ +/).slice(1);
-        // Handle bot mention logic here
     }
 });
