@@ -392,3 +392,43 @@ export async function setPublic(message: any, historyId?: string): Promise<void>
         message.reply('An error occurred while renaming the file.');
     }
 }
+export async function list(message: any): Promise<void> {
+    const userId = message.author.id;
+    const historyDir = path.join('src', 'history');
+
+    try {
+        const files = await fs.promises.readdir(historyDir);
+        const userFiles = files.filter(file => file.startsWith(`${userId}_`));
+
+        if (userFiles.length === 0) {
+            message.reply(`No history files found for user ID ${userId}.`);
+            return;
+        }
+
+        const fileList = userFiles.join('\n');
+        message.reply(`History files for user ID ${userId}:\n${fileList}`);
+    } catch (error) {
+        console.error('Error reading history directory:', error);
+        message.reply('An error occurred while listing the history files.');
+    }
+}
+export async function publiclist(message: any): Promise<void> {
+    const userId = "public";
+    const historyDir = path.join('src', 'history');
+
+    try {
+        const files = await fs.promises.readdir(historyDir);
+        const userFiles = files.filter(file => file.startsWith(`${userId}_`));
+
+        if (userFiles.length === 0) {
+            message.reply(`No history files found for user ID ${userId}.`);
+            return;
+        }
+
+        const fileList = userFiles.join('\n');
+        message.reply(`History files for user ID ${userId}:\n${fileList}`);
+    } catch (error) {
+        console.error('Error reading history directory:', error);
+        message.reply('An error occurred while listing the history files.');
+    }
+}

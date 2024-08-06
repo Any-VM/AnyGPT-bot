@@ -2,7 +2,7 @@ import { Client, GatewayIntentBits, REST, Routes, ActionRowBuilder, StringSelect
 import dotenv from 'dotenv'; 
 import fs from 'fs';
 dotenv.config();
-import { key, readUserIds, writeUserIds, readModels, clearHistory, setHistory, loadHistory, sendmessage, loadPublic, setPublic, copyHistory, showHistory } from './utils';
+import { key, readUserIds, writeUserIds, readModels, clearHistory, setHistory, loadHistory, sendmessage, loadPublic, setPublic, copyHistory, showHistory, list, publiclist } from './utils';
 import path from 'path';
 const commands = JSON.parse(fs.readFileSync('src/commands.json', 'utf-8'));
 
@@ -165,6 +165,12 @@ client.on('messageCreate', async (message: Message) => {
                     message.reply('Please provide a history ID.');
                     return;
                 }
+                const isValidHistoryId = /^[a-zA-Z0-9]+$/.test(historyId);
+                if (!isValidHistoryId) {
+                    message.reply('History ID must contain only numerical and alphabetical characters.');
+                    return;
+                }
+            
                 setHistory(message, historyId);
             } else if (subCommand === 'clear') {
                 const historyId = args[0];
@@ -231,9 +237,14 @@ client.on('messageCreate', async (message: Message) => {
                 const userId = message.author.id;
                 const response = await sendmessage(args.join(' '), userId);
                 message.reply(response);
-            }          
+            }   else if (subCommand === 'list') {
+                      list(message);
+            }
+            else if (subCommand === 'publist') {
+                publiclist(message);
+      }
              else {
-                message.reply('Unknown subcommand. Use `!mem load <historyid>`, `!mem set <historyid>`, `!mem clear`, `!mem show`, `!mem copy <targetHistoryId>`, `!mem public <historyid>`, or `!mem loadpublic <historyid>`. historyid will default to last loaded history');
+                message.reply('Unknown subcommand. Use `!mem load <historyid>`, `!mem set <historyid>`, `!mem clear`, `!mem show`, `!mem copy <targetHistoryId>`, `!mem public <historyid>`, `!mem list`, `!mem publist`, or `!mem loadpublic <historyid>`. historyid will default to last loaded history');
             }
         }
     }
