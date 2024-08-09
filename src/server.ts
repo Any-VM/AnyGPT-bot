@@ -142,8 +142,8 @@ client.on('messageCreate', async (message: Message) => {
     const prefix = '!';
     if (client.user && message.content.includes(client.user.id)) {
         const args = message.content.split(/ +/).slice(1);
-        const response = await sendmessage(args.join(' '), userId);
-        message.reply(response);
+  sendmessage(args.join(' '), userId, message);
+
     } 
     if (message.content.startsWith(prefix)) {
         const args = message.content.slice(prefix.length).trim().split(/ +/);
@@ -235,8 +235,8 @@ client.on('messageCreate', async (message: Message) => {
             }else if (subCommand === 'chat') {
                 const args = message.content.split(/ +/).slice(1);
                 const userId = message.author.id;
-                const response = await sendmessage(args.join(' '), userId);
-                message.reply(response);
+                sendmessage(args.join(' '), userId, message);
+                
             }   else if (subCommand === 'list') {
                       list(message);
             }

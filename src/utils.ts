@@ -2,9 +2,6 @@ import axios from 'axios';
 import * as fs from 'fs';
 import * as path from 'path';
 
-
-
-
 export function readUserIds() {
     const dbFilePath = path.join('src', 'db.json');
     if (fs.existsSync(dbFilePath)) {
@@ -63,20 +60,35 @@ export async function key(name: string) {
     }
 }
 
-export async function sendmessage(args: string, userId: string) {
+export async function sendmessage(args: string, userId: string, message: any) {
     const dbFilePath = path.join('src', 'db.json');
     const dbContent = await fs.promises.readFile(dbFilePath, 'utf-8');
     const db = JSON.parse(dbContent);
 
-    if (!db[userId] || !db[userId].apiKey) {
-        db[userId] = db[userId] || {};
+if (!db[userId]) {
+    db[userId] = {
+        historyFilePath: await setHistory(message, 'default'),
+        apiKey: await key(userId),
+        model: 'gpt-3.5-turbo'
+    };
+} else {
+    if (!db[userId].historyFilePath || db[userId].historyFilePath === undefined ) {
+        setHistory(message, 'default');
+    message.reply("retry again to get response or !mem set <name>")
+    return;
+    }
+    if ( !db[userId].apiKey || db[userId].apiKey === undefined) {
         db[userId].apiKey = await key(userId);
     }
-
+    
     if (!db[userId].model) {
         db[userId].model = 'gpt-3.5-turbo';
+        fs.writeFileSync(dbFilePath, JSON.stringify(db, null, 2));
     }
+}
 
+    console.log(db[userId].historyFilePath, "shuh");
+ 
     const userApiKey = db[userId].apiKey;
     const model = db[userId].model;
 
@@ -88,10 +100,6 @@ export async function sendmessage(args: string, userId: string) {
     };
 
     let messageHistory: { messages: { role: string, content: string }[] } = { messages: [] };
-
-    if (!db[userId].historyFilePath) {
-        return `No history file path found for user ID ${userId} in db.json.`;
-    }
 
     const messageHistoryFilePath = path.join('src', 'history', db[userId].historyFilePath);
 
@@ -130,18 +138,18 @@ export async function sendmessage(args: string, userId: string) {
 
         fs.writeFileSync(messageHistoryFilePath, JSON.stringify(messageHistory, null, 2));
 
-        return assistantMessage.content;
+        message.reply(assistantMessage.content);
     } catch (error: string | any) {
         console.error('Error sending message:', error);
         
         const errorMessage = String(error);
     
         if (error.response && error.response.data && error.response.data.message) {
-            return `Error: ${error.response.data.message}`;
+            message.reply(`Error: ${error.response.data.message}`);
         } else if (error.message) {
-            return `Error: ${error.message}`;
+            message.reply(`Error: ${error.message}`);
         } else {
-            return `An unknown error occurred: ${errorMessage}`;
+            message.reply(`An unknown error occurred: ${errorMessage}`);
         }
     }
 }
@@ -176,14 +184,24 @@ export async function loadPublic(message: any, historyId: string): Promise<void>
 export function setHistory(message: any, historyId: string): void {
     const userId: string = message.author.id;
     const messageHistoryFilePath: string = path.join('src/history', `${userId}_${historyId}.json`);
+    console.log(messageHistoryFilePath, "bruh");
 
     if (!fs.existsSync('src/history')) {
         fs.mkdirSync('src/history');
     }
 
-    fs.writeFileSync(messageHistoryFilePath, JSON.stringify({ messages: [] }, null, 2));
-    saveDB(messageHistoryFilePath, message); 
-    message.reply(`History ID set to: ${historyId}`);
+    if (!fs.existsSync(messageHistoryFilePath)) {
+        fs.writeFileSync(messageHistoryFilePath, JSON.stringify({ messages: [] }, null, 2));
+         saveDB(messageHistoryFilePath, message);
+        console.log(messageHistoryFilePath, "file path");
+    } else {
+         saveDB(messageHistoryFilePath, message);
+        console.log(`File ${messageHistoryFilePath} already exists.`);
+    }
+
+    if (message) {
+        message.reply(`History ID set to: ${historyId}`);
+    }
 }
 
 export async function copyHistory(message: any, historyId: string): Promise<void> {
@@ -312,8 +330,8 @@ export function clearHistory(message: any, historyId?: string): void {
     const userHistoryFilePath: string = path.join('src/history', `${userId}_${historyId}.json`);
 
     if (fs.existsSync(userHistoryFilePath)) {
-        fs.writeFileSync(userHistoryFilePath, JSON.stringify([]));
-        message.reply('History cleared.');
+        fs.unlinkSync(userHistoryFilePath);
+        message.reply('History file deleted.');
     } else {
         message.reply('No history found for the given historyId.');
     }
@@ -327,7 +345,9 @@ export function clearHistory(message: any, historyId?: string): void {
     }
 }
 async function saveDB(MessageHistoryFilePath: string, message: any): Promise<void> {
+    console.log(MessageHistoryFilePath, "MessageHistoryFilePath");
     try {
+        console.log(`saveDB`);
         const dbFilePath = path.join('src', 'db.json');
 
         await checkDatabaseFile(dbFilePath, message);
@@ -342,11 +362,13 @@ async function saveDB(MessageHistoryFilePath: string, message: any): Promise<voi
         }
 
         const fileName = path.basename(MessageHistoryFilePath);
+        console.log(fileName, "fileName");
         db[userId].historyFilePath = fileName;
-
+console.log(fileName, "fileName");
         fs.writeFileSync(dbFilePath, JSON.stringify(db, null, 2));
+        console.log(db[userId].historyFilePath, "db[userId].historyFilePath");
     } catch (error) {
-        console.error('Error in saveDB:', error);
+        message.reply('Error in saveDB:', error);
     }
 }
 export async function setPublic(message: any, historyId?: string): Promise<void> {
@@ -405,13 +427,15 @@ export async function list(message: any): Promise<void> {
             return;
         }
 
-        const fileList = userFiles.join('\n');
-        message.reply(`History files for user ID ${userId}:\n${fileList}`);
+        const historyIds = userFiles.map(file => file.replace(`${userId}_`, '').replace('.json', ''));
+        const fileList = historyIds.join('\n');
+        message.reply(`History IDs for user ID ${userId}:\n${fileList}`);
     } catch (error) {
         console.error('Error reading history directory:', error);
         message.reply('An error occurred while listing the history files.');
     }
 }
+
 export async function publiclist(message: any): Promise<void> {
     const userId = "public";
     const historyDir = path.join('src', 'history');
@@ -425,8 +449,9 @@ export async function publiclist(message: any): Promise<void> {
             return;
         }
 
-        const fileList = userFiles.join('\n');
-        message.reply(`History files for user ID ${userId}:\n${fileList}`);
+        const historyIds = userFiles.map(file => file.replace(`${userId}_`, '').replace('.json', ''));
+        const fileList = historyIds.join('\n');
+        message.reply(`History IDs for user ID ${userId}:\n${fileList}`);
     } catch (error) {
         console.error('Error reading history directory:', error);
         message.reply('An error occurred while listing the history files.');
