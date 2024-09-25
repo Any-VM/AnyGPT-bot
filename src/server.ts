@@ -15,9 +15,13 @@ const client = new Client({
     ],
 });
 
+const token = process.env.TOKEN
+if (!token) {
+    throw new Error('token is not defined in the environment variables');
+}
 
-client.login(process.env.TOKEN);
-const rest = new REST({ version: '10' }).setToken(process.env.TOKEN!);
+client.login(token);
+const rest = new REST({ version: '10' }).setToken(token);
 
 async function registerCommands() {
     try {

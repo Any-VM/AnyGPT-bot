@@ -1,6 +1,9 @@
 import axios from 'axios';
 import * as fs from 'fs';
 import * as path from 'path';
+import dotenv from 'dotenv'; 
+dotenv.config();
+const apiKey = process.env.API_KEY
 
 export function readUserIds() {
     const dbFilePath = path.join('src', 'db.json');
@@ -89,10 +92,16 @@ if (!db[userId]) {
 
     console.log(db[userId].historyFilePath, "shuh");
  
-    const userApiKey = db[userId].apiKey;
+    let userApiKey = apiKey;
+    if (!apiKey) {
+        userApiKey = db[userId].apiKey;
+   }
     const model = db[userId].model;
 
-    const url = 'https://gpt.anyvm.tech/v1/chat/completions';
+    const url = process.env.URL;
+    if (!url) {
+        throw new Error('URL is not defined in the environment variables');
+    }
     
     const headers = {
         'Authorization': `Bearer ${userApiKey}`,
