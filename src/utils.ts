@@ -4,7 +4,7 @@ import * as path from 'path';
 import dotenv from 'dotenv'; 
 dotenv.config();
 const apiKey = process.env.API_KEY
-
+const DISCORD_MAX_MESSAGE_LENGTH = 2000;
 export function readUserIds() {
     const dbFilePath = path.join('src', 'db.json');
     if (fs.existsSync(dbFilePath)) {
@@ -35,15 +35,6 @@ export async function readModels() {
         return [];
     }
 }
-
-export function saveUserData(userId: string, apiKey: string, selectedModel: string) {
-    const userIds = readUserIds();
-    userIds[userId] = {
-        apiKey: apiKey,
-        model: selectedModel
-    };
-    writeUserIds(userIds);
-}
 export async function key(name: string) {
     try {
         const response = await axios.post(
@@ -63,46 +54,80 @@ export async function key(name: string) {
     }
 }
 
+function splitMessage(message: string, maxLength: number): string[] {
+    const chunks: string[] = [];
+    let start = 0;
+
+    while (start < message.length) {
+        let end = start + maxLength;
+        if (end >= message.length) {
+            chunks.push(message.slice(start));
+            break;
+        }
+
+        let lastSentenceEnd = message.lastIndexOf('.', end);
+        if (lastSentenceEnd === -1 || lastSentenceEnd < start) {
+            lastSentenceEnd = message.lastIndexOf('!', end);
+        }
+        if (lastSentenceEnd === -1 || lastSentenceEnd < start) {
+            lastSentenceEnd = message.lastIndexOf('?', end);
+        }
+        if (lastSentenceEnd === -1 || lastSentenceEnd < start) {
+            lastSentenceEnd = message.lastIndexOf('\n', end);
+        }
+
+        if (lastSentenceEnd !== -1 && lastSentenceEnd >= start) {
+            end = lastSentenceEnd + 1;
+        }
+
+        chunks.push(message.slice(start, end).trim());
+        start = end;
+    }
+
+    return chunks;
+}
+
+
 export async function sendmessage(args: string, userId: string, message: any) {
     const dbFilePath = path.join('src', 'db.json');
     const dbContent = await fs.promises.readFile(dbFilePath, 'utf-8');
     const db = JSON.parse(dbContent);
 
-if (!db[userId]) {
-    db[userId] = {
-        historyFilePath: await setHistory(message, 'default'),
-        apiKey: await key(userId),
-        model: 'gpt-3.5-turbo'
-    };
-} else {
-    if (!db[userId].historyFilePath || db[userId].historyFilePath === undefined ) {
-        setHistory(message, 'default');
-    message.reply("retry again to get response or !mem set <name>")
-    return;
+    if (!db[userId]) {
+        db[userId] = {
+            historyFilePath: await setHistory(message, 'default'),
+            apiKey: await key(userId),
+            model: 'gpt-3.5-turbo'
+        };
+    } else {
+        if (!db[userId].historyFilePath || db[userId].historyFilePath === undefined) {
+            setHistory(message, 'default');
+            message.reply("retry again to get response or !mem set <name>");
+            return;
+        }
+        if (!db[userId].apiKey || db[userId].apiKey === undefined) {
+            db[userId].apiKey = await key(userId);
+        }
+
+        if (!db[userId].model) {
+            db[userId].model = 'gpt-3.5-turbo';
+            fs.writeFileSync(dbFilePath, JSON.stringify(db, null, 2));
+        }
     }
-    if ( !db[userId].apiKey || db[userId].apiKey === undefined) {
-        db[userId].apiKey = await key(userId);
-    }
-    
-    if (!db[userId].model) {
-        db[userId].model = 'gpt-3.5-turbo';
-        fs.writeFileSync(dbFilePath, JSON.stringify(db, null, 2));
-    }
-}
 
     console.log(db[userId].historyFilePath, "shuh");
- 
+
     let userApiKey = apiKey;
     if (!apiKey) {
         userApiKey = db[userId].apiKey;
-   }
+    }
     const model = db[userId].model;
 
     const url = process.env.URL;
     if (!url) {
         throw new Error('URL is not defined in the environment variables');
     }
-    
+
     const headers = {
         'Authorization': `Bearer ${userApiKey}`,
         'Content-Type': 'application/json'
@@ -112,8 +137,8 @@ if (!db[userId]) {
 
     const messageHistoryFilePath = path.join('src', 'history', db[userId].historyFilePath);
 
-    if (!fs.existsSync('src/history')) {
-        fs.mkdirSync('src/history');
+    if (!fs.existsSync(path.join('src', 'history'))) {
+        fs.mkdirSync(path.join('src', 'history'), { recursive: true });
     }
 
     if (fs.existsSync(messageHistoryFilePath)) {
@@ -147,12 +172,15 @@ if (!db[userId]) {
 
         fs.writeFileSync(messageHistoryFilePath, JSON.stringify(messageHistory, null, 2));
 
-        message.reply(assistantMessage.content);
+        const chunks = splitMessage(assistantMessage.content, DISCORD_MAX_MESSAGE_LENGTH);
+        for (const chunk of chunks) {
+            await message.reply(chunk);
+        }
     } catch (error: string | any) {
         console.error('Error sending message:', error);
-        
+
         const errorMessage = String(error);
-    
+
         if (error.response && error.response.data && error.response.data.message) {
             message.reply(`Error: ${error.response.data.message}`);
         } else if (error.message) {
@@ -256,14 +284,14 @@ export async function copyHistory(message: any, historyId: string): Promise<void
         message.reply('An error occurred while accessing the database.');
     }
 }
-export function showHistory(message: any, historyId?: string): void {
+export async function showHistory(message: any, historyId?: string): Promise<void> {
     const userId: string = message.author.id;
     let userHistoryFilePath: string;
     let extractedHistoryId: string | undefined;
 
     const dbFilePath = path.join('src', 'db.json');
     if (!fs.existsSync(dbFilePath)) {
-        message.reply('No history ID provided and db.json file not found.');
+        await message.reply('No history ID provided and db.json file not found.');
         return;
     }
 
@@ -272,7 +300,7 @@ export function showHistory(message: any, historyId?: string): void {
     const userRecord = db[userId];
 
     if (!userRecord) {
-        message.reply('User record not found in db.json.');
+        await message.reply('User record not found in db.json.');
         return;
     }
 
@@ -284,11 +312,11 @@ export function showHistory(message: any, historyId?: string): void {
             if (parts.length === 2 && (parts[0] === 'public' || parts[0] === userId)) {
                 extractedHistoryId = parts[1];
             } else {
-                message.reply('Invalid history file path format in db.json.');
+                await message.reply('Invalid history file path format in db.json.');
                 return;
             }
         } else {
-            message.reply('No history ID provided and no default history file path found in db.json.');
+            await message.reply('No history ID provided and no default history file path found in db.json.');
             return;
         }
     } else {
@@ -298,22 +326,27 @@ export function showHistory(message: any, historyId?: string): void {
             userHistoryFilePath = path.join('src/history', `${userId}_${historyId}.json`);
         }
     }
+
     let status = '';
-    
     if (db[userId] && db[userId].historyFilePath) {
         const historyFilePath = db[userId].historyFilePath;
-    
         if (/public/.test(historyFilePath)) {
             status = 'public';
         } else if (/\d/.test(historyFilePath)) {
             status = 'private';
         }
     }
+
     if (fs.existsSync(userHistoryFilePath)) {
         const historyContent = fs.readFileSync(userHistoryFilePath, 'utf-8');
-        message.reply(`${status} history ID is ${historyId || extractedHistoryId}\nContents of the file:\n${historyContent}`);
+        const replyMessage = `${status} history ID is ${historyId || extractedHistoryId}\nContents of the file:\n${historyContent}`;
+        if (replyMessage.length > DISCORD_MAX_MESSAGE_LENGTH) {
+            await message.reply('Max character limit reached.');
+        } else {
+            await message.reply(replyMessage);
+        }
     } else {
-        message.reply('No history found for the given history ID.');
+        await message.reply('No history found for the given history ID.');
     }
 }
 export function clearHistory(message: any, historyId?: string): void {
